@@ -6,12 +6,12 @@ module.exports = function(app) {
   plugin.name = PLUGIN_NAME;
   plugin.description = 'Plugin to convert signalk data to ISO 19848';
 
-  
+
   plugin.start = function(options, restartPlugin) {
     app.setProviderStatus("Initializing");
     plugin.options = options;
     app.debug('Plugin started');
-   
+
   };
 
   // called when the plugin is stopped or encounters an error
@@ -19,10 +19,14 @@ module.exports = function(app) {
     app.debug('Plugin stopped');
     app.setProviderStatus('Stopped');
   };
+  plugin.signalKApiRoutes = function(router) {
+    router.get('/list/*', listHandler);
+    return router;
+  };
 
   // The plugin configuration
   plugin.schema = {
-    
+
   };
 
   return plugin;
