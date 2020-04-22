@@ -31,7 +31,7 @@ module.exports = function(app) {
 
           },
           TimeSeriesData: {
-            none: "test"
+
           }
         }
       }
@@ -39,7 +39,7 @@ module.exports = function(app) {
     };
     const channelListHandler = function(req, res, next) {
       res.type('text/xml');
-      paths = app.streambundle.getAvailablePaths().filter(path => app.getSelfPath(path))
+      let paths = app.streambundle.getAvailablePaths().filter(path => app.getSelfPath(path) && path.split('.')[0] != 'notifications')
       let data = {
         Package: {
           Header: {
@@ -68,13 +68,20 @@ module.exports = function(app) {
   };
 
   function createDataChannel(path, shortID) {
-    app.debug(path)
     let meta = app.getSelfPath(path).meta
     let unit
     if (meta) {
       unit = app.getSelfPath(path).meta.units
     }
-
+    let type = typeof app.getSelfPath(path).value
+    let format = 'Decimal'
+    if (path == 'navigation.datetime') {
+      format = 'DateTime'
+    } else if (type == 'string' || path == 'mmsi') {
+      format = 'String'
+    } else if (type == 'boolean') {
+      format = 'Boolean'
+    }
     return {
       DataChannelID: createDataChannelID(path, shortID),
       Property: {
@@ -82,7 +89,7 @@ module.exports = function(app) {
           Type: "Inst"
         },
         Format: {
-          Type: 'Decimal'
+          Type: format
         },
         Unit: {
           UnitSymbol: unit
@@ -91,7 +98,8 @@ module.exports = function(app) {
     }
   }
 
-  function createDataChannelID(localID, shortID) {
+  function createDataChannelID(path, shortID) {
+    let localID = path.replace(/\./g, '/')
     return {
       localID: localID,
       shortID: shortID,
