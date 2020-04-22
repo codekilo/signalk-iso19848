@@ -35,11 +35,11 @@ module.exports = function(app) {
           }
         }
       }
-      res.send(builder.buildObject(data))
+      res.send(builder.buildObject(data) + '\n')
     };
     const channelListHandler = function(req, res, next) {
       res.type('text/xml');
-      paths = app.streambundle.getAvailablePaths()
+      paths = app.streambundle.getAvailablePaths().filter(path => app.getSelfPath(path))
       let data = {
         Package: {
           Header: {
@@ -56,7 +56,7 @@ module.exports = function(app) {
           }
         }
       }
-      res.send(builder.buildObject(data))
+      res.send(builder.buildObject(data) + '\n')
 
     }
     router.get('/iso19848/datachannelist.xml', channelListHandler);
