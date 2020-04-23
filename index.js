@@ -2,6 +2,7 @@ const PLUGIN_ID = 'signalk-iso19848';
 const PLUGIN_NAME = 'SignalK ISO 19848';
 const xml2js = require('xml2js');
 var builder = new xml2js.Builder();
+const _ = require("lodash");
 module.exports = function(app) {
   var plugin = {};
   plugin.id = PLUGIN_ID;
@@ -24,6 +25,7 @@ module.exports = function(app) {
   plugin.signalKApiRoutes = function(router) {
     const isoHandler = function(req, res, next) {
       res.type('text/xml');
+      updateDataChannelList(plugin)
       let data = {
         Package: {
           Header: {
@@ -39,20 +41,20 @@ module.exports = function(app) {
     };
     const channelListHandler = function(req, res, next) {
       res.type('text/xml');
-      let paths = app.streambundle.getAvailablePaths().filter(path => app.getSelfPath(path) && path.split('.')[0] != 'notifications')
+      updateDataChannelList(plugin)
       let data = {
         Package: {
           Header: {
             ShipID: app.getSelfPath('mmsi'),
             DataChannelListID: {
               ID: 'signalk/v1/api/iso19848/datachannelist.xml',
-              TimeStamp: new Date().toISOString().split('.')[0] + "Z"
+              TimeStamp: plugin.dataChanneList.timeStamp.toISOString().split('.')[0] + "Z"
             },
             Author: PLUGIN_ID
 
           },
           DataChannelList: {
-            DataChannel: paths.map(createDataChannel)
+            DataChannel: plugin.dataChanneList.availablePaths.map(createDataChannel)
           }
         }
       }
@@ -66,6 +68,31 @@ module.exports = function(app) {
 
     return router;
   };
+
+  function updateDataChannelList(plugin) {
+    let temp = createDataChannelList()
+    if (!plugin.dataChanneList) {
+      plugin.dataChanneList = temp
+      app.debug('creating new list')
+    } else if (!dataChannelListIsEqual(plugin.dataChanneList, temp)) {
+      plugin.dataChanneList = temp
+      app.debug('updating list')
+    }
+  }
+
+
+  function dataChannelListIsEqual(l1, l2) {
+    return _.isEqual(l1.availablePaths, l2.availablePaths)
+  }
+
+  function createDataChannelList() {
+    let paths = app.streambundle.getAvailablePaths().filter(path => app.getSelfPath(path) && path.split('.')[0] != 'notifications')
+    let time = new Date()
+    return {
+      availablePaths: paths,
+      timeStamp: time
+    }
+  }
 
   function createDataChannel(path, shortID) {
     let meta = app.getSelfPath(path).meta
