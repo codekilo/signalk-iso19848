@@ -2,13 +2,13 @@ const PLUGIN_ID = 'signalk-iso19848';
 const PLUGIN_NAME = 'SignalK ISO 19848';
 const xml2js = require('xml2js');
 var builder = new xml2js.Builder();
-const _ = require("lodash");
+const DataChannelList = require('./lib/DataChannelList.js')
 module.exports = function(app) {
   var plugin = {};
   plugin.id = PLUGIN_ID;
   plugin.name = PLUGIN_NAME;
   plugin.description = 'Plugin to convert signalk data to ISO 19848';
-
+  plugin.dataChannelList = new DataChannelList(app)
 
   plugin.start = function(options, restartPlugin) {
     app.setProviderStatus("Initializing");
@@ -25,7 +25,7 @@ module.exports = function(app) {
   plugin.signalKApiRoutes = function(router) {
     const isoHandler = function(req, res, next) {
       res.type('text/xml');
-      updateDataChannelList(plugin)
+      plugin.dataChannelList.update()
       let dataChannelList = createTabularDataChannelList(plugin.dataChannelList.availablePaths, plugin.dataChannelList)
       let dataset = createDataSets(plugin.dataChannelList.availablePaths, plugin.dataChannelList)
       let data = {
@@ -36,7 +36,7 @@ module.exports = function(app) {
           },
           TimeSeriesData: {
             TabularData: {
-              NumberOfDataSet: 2,
+              NumberOfDataSet: dataset.length,
               NumberOfDataChannel: dataChannelList.length,
               DataChannelID: dataChannelList,
               DataSet: dataset
@@ -49,20 +49,20 @@ module.exports = function(app) {
     };
     const channelListHandler = function(req, res, next) {
       res.type('text/xml');
-      updateDataChannelList(plugin)
+      plugin.dataChannelList.update()
       let data = {
         Package: {
           Header: {
             ShipID: app.getSelfPath('mmsi'),
             DataChannelListID: {
               ID: 'signalk/v1/api/iso19848/datachannelist.xml',
-              TimeStamp: stripMiliSeconds(plugin.dataChannelList.timeStamp)
+              TimeStamp: stripMiliSeconds(plugin.dataChannelList.time)
             },
             Author: PLUGIN_ID
 
           },
           DataChannelList: {
-            DataChannel: plugin.dataChannelList.availablePaths.map(createDataChannel)
+            DataChannel: plugin.dataChannelList.getDataChannelList()
           }
         }
       }
@@ -94,7 +94,7 @@ module.exports = function(app) {
       if (!dataset[timestamp]) {
         dataset[timestamp] = new Array(paths.length)
       }
-      dataset[timestamp][getShortID(path, dataChannelList)] = value
+      dataset[timestamp][dataChannelList.getShortID(path)] = value
     })
     let res = Object.entries(dataset).map(([timestamp, values]) => {
       return createDataSet(timestamp, values)
@@ -113,7 +113,7 @@ module.exports = function(app) {
 
   function createValueList(values) {
     let res = new Array(values.length)
-    for (var i = res.length - 1; i >= 0; i--) {
+    for (var i = res.length; i >= 0; i--) {
       res[i] = createDataSetValue(values[i], i)
     }
     return res
@@ -133,7 +133,7 @@ module.exports = function(app) {
 
   function createTabularDataChannelList(paths, dataChannelList) {
     return paths.map((path, index) => {
-      return createTabularDataChannel(getShortID(path, dataChannelList), index)
+      return createTabularDataChannel(dataChannelList.getShortID(path), index)
     })
   }
 
@@ -146,80 +146,7 @@ module.exports = function(app) {
     }
   }
 
-  function getShortID(path, dataChannelList) {
-    return dataChannelList.availablePaths.indexOf(path);
-  }
 
-  function getPath(shortID, dataChannelList) {
-    return dataChannelList.availablePaths[shortID];
-  }
-
-  function updateDataChannelList(plugin) {
-    let temp = createDataChannelList()
-    if (!plugin.dataChannelList) {
-      plugin.dataChannelList = temp
-      app.debug('creating new list')
-    } else if (!dataChannelListIsEqual(plugin.dataChannelList, temp)) {
-      plugin.dataChannelList = temp
-      app.debug('updating list')
-    }
-  }
-
-
-  function dataChannelListIsEqual(l1, l2) {
-    return _.isEqual(l1.availablePaths, l2.availablePaths)
-  }
-
-  function createDataChannelList() {
-    let paths = app.streambundle.getAvailablePaths().filter(path => app.getSelfPath(path) && path.split('.')[0] != 'notifications')
-    let time = new Date()
-    return {
-      availablePaths: paths,
-      timeStamp: time
-    }
-  }
-
-  function createDataChannel(path, shortID) {
-    let meta = app.getSelfPath(path).meta
-    let unit
-    if (meta) {
-      unit = app.getSelfPath(path).meta.units
-    }
-    let type = typeof app.getSelfPath(path).value
-    let format = 'Decimal'
-    if (path == 'navigation.datetime') {
-      format = 'DateTime'
-    } else if (type == 'string' || path == 'mmsi') {
-      format = 'String'
-    } else if (type == 'boolean') {
-      format = 'Boolean'
-    }
-    return {
-      DataChannelID: createDataChannelID(path, shortID),
-      Property: {
-        DataChannelType: {
-          Type: "Inst"
-        },
-        Format: {
-          Type: format
-        },
-        Unit: {
-          UnitSymbol: unit
-        }
-      }
-    }
-  }
-
-  function createDataChannelID(path, shortID) {
-    let localID = path.replace(/\./g, '/')
-    return {
-      localID: localID,
-      shortID: shortID,
-      NameObject: {
-        NamingRule: "SignalK"
-      }
-    }
-  }
 
   // The plugin configuration
   plugin.schema = {
