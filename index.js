@@ -3,6 +3,7 @@ const PLUGIN_NAME = 'SignalK ISO 19848';
 const xml2js = require('xml2js');
 var builder = new xml2js.Builder();
 const DataChannelList = require('./lib/DataChannelList.js')
+const util = require('./lib/util.js')
 module.exports = function(app) {
   var plugin = {};
   plugin.id = PLUGIN_ID;
@@ -26,7 +27,7 @@ module.exports = function(app) {
     const isoHandler = function(req, res, next) {
       res.type('text/xml');
       plugin.dataChannelList.update()
-      let dataChannelList = createTabularDataChannelList(plugin.dataChannelList.availablePaths, plugin.dataChannelList)
+      let dataChannelList = createTabularDataChannelList(plugin.dataChannelList.getPaths(), plugin.dataChannelList)
       let dataset = createDataSets(plugin.dataChannelList.availablePaths, plugin.dataChannelList)
       let data = {
         Package: {
@@ -56,7 +57,7 @@ module.exports = function(app) {
             ShipID: app.getSelfPath('mmsi'),
             DataChannelListID: {
               ID: 'signalk/v1/api/iso19848/datachannelist.xml',
-              TimeStamp: stripMiliSeconds(plugin.dataChannelList.time)
+              TimeStamp: util.stripMiliSeconds(plugin.dataChannelList.time)
             },
             Author: PLUGIN_ID
 
@@ -77,24 +78,21 @@ module.exports = function(app) {
     return router;
   };
 
-  function stripMiliSeconds(date) {
-    return date.toISOString().split('.')[0] + "Z"
-  }
 
   function createDataSets(paths, dataChannelList) {
     let dataset = {}
     paths.forEach((path, index) => {
-      let data = app.getSelfPath(path)
+      let data = app.getSelfPath(path.path)
       let value = data.value
       let time = data.timestamp
       if (!time) {
         time = new Date(0).toISOString()
       }
-      let timestamp = stripMiliSeconds(new Date(time))
+      let timestamp = util.stripMiliSeconds(new Date(time))
       if (!dataset[timestamp]) {
         dataset[timestamp] = new Array(paths.length)
       }
-      dataset[timestamp][dataChannelList.getShortID(path)] = value
+      dataset[timestamp][path.shortID] = value
     })
     let res = Object.entries(dataset).map(([timestamp, values]) => {
       return createDataSet(timestamp, values)
