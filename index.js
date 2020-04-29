@@ -50,6 +50,7 @@ module.exports = function(app) {
     return router;
   };
 
+
   function getData(paths) {
     return paths.map(path => {
       let data = app.getSelfPath(path)
