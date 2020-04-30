@@ -27,11 +27,14 @@ module.exports = function(app) {
   };
   plugin.signalKApiRoutes = function(router) {
     const isoHandler = function(req, res, next) {
-      res.type('text/xml');
       plugin.dataChannelList.update()
-      let dataset = getData(plugin.dataChannelList.getPaths())
+
+      let paths = getPaths(req.path, plugin.dataChannelList.getPaths())
+      res.type('text/xml');
+
+      let dataset = getData(paths)
       let mmsi = app.getSelfPath('mmsi')
-      let data = isoTimeSeries.create(mmsi, plugin.dataChannelList.getPaths(), plugin.dataChannelList, dataset)
+      let data = isoTimeSeries.create(mmsi, paths, plugin.dataChannelList, dataset)
       res.send(builder.buildObject(data) + '\n');
     };
     const channelListHandler = function(req, res, next) {
@@ -50,6 +53,16 @@ module.exports = function(app) {
     return router;
   };
 
+  // Get al list of all paths that start with the requested URL
+  function getPaths(url, paths) {
+    let path = url.replace('/iso19848', '').replace(/^\//g, '')
+    if (path == '') {
+      return paths
+    } else {
+      let requestedPath = path.replace(/\//g, '.')
+      return paths.filter((path) => path.startsWith(requestedPath))
+    }
+  }
 
   function getData(paths) {
     return paths.map(path => {
